@@ -1,69 +1,12 @@
 package atomicwaitnotify
 
 import (
-	"fmt"
 	"runtime"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
 )
-
-func BenchmarkFutex(b *testing.B) {
-	for i := 1; i < 10; i++ {
-		delays := make([]int64, i)
-
-		b.Run(fmt.Sprintf("P=1 C=%d", len(delays)), func(b *testing.B) {
-			Counter := uint32(0)
-			SendTP := int64(0)
-
-			wg := sync.WaitGroup{}
-
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for {
-					time.Sleep(1 * time.Millisecond)
-					Counter++
-					atomic.StoreInt64(&SendTP, time.Now().UnixNano())
-					NotifyAllUint32(&Counter)
-
-					if Counter >= uint32(b.N) {
-						return
-					}
-				}
-			}()
-
-			wg.Add(len(delays))
-			for consumerID := range delays {
-				go func() {
-					defer wg.Done()
-					for i := range uint32(b.N) {
-						WaitUint32(&Counter, i)
-						now := time.Now()
-						delay := now.UnixNano() - SendTP
-						delays[consumerID] += delay
-
-						if Counter >= uint32(b.N) {
-							return
-						}
-					}
-				}()
-			}
-
-			wg.Wait()
-
-			var sum float64 = 0
-			for _, delay := range delays {
-				sum += float64(delay)
-			}
-			sum = sum / float64(len(delays)) / float64(b.N)
-
-			b.ReportMetric(float64(sum), "ns/msg")
-		})
-	}
-}
 
 func TestFutexWaitAndWake(t *testing.T) {
 	var futexVal uint32 = 0
