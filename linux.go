@@ -42,10 +42,14 @@ func futexWait(addr *uint32, val uint32, timeout *unix.Timespec) error {
 		uintptr(unsafe.Pointer(nil)),
 		uintptr(0),
 	)
-	if errno != 0 {
+	switch errno {
+	case 0:
+		return nil
+	case unix.EAGAIN:
+		return nil
+	default:
 		return errno
 	}
-	return nil
 }
 
 // futexWake wakes up n threads waiting on the futex at addr.
