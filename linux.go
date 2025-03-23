@@ -4,6 +4,7 @@ package atomicwaitnotify
 
 import (
 	"math"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -33,22 +34,27 @@ const (
 
 // futexWait blocks until the futex value at addr is changed or timeout occurs.
 func futexWait(addr *uint32, val uint32, timeout *unix.Timespec) error {
-	_, _, errno := unix.Syscall6(
-		unix.SYS_FUTEX,
-		uintptr(unsafe.Pointer(addr)),
-		uintptr(FUTEX_WAIT),
-		uintptr(val),
-		uintptr(unsafe.Pointer(timeout)),
-		uintptr(unsafe.Pointer(nil)),
-		uintptr(0),
-	)
-	switch errno {
-	case 0:
-		return nil
-	case unix.EAGAIN:
-		return nil
-	default:
-		return errno
+	for {
+		_, _, errno := unix.Syscall6(
+			unix.SYS_FUTEX,
+			uintptr(unsafe.Pointer(addr)),
+			uintptr(FUTEX_WAIT),
+			uintptr(val),
+			uintptr(unsafe.Pointer(timeout)),
+			uintptr(unsafe.Pointer(nil)),
+			uintptr(0),
+		)
+		switch errno {
+		case 0:
+			return nil
+		case unix.EAGAIN, unix.EINTR:
+			if atomic.LoadUint32(addr) == val {
+				continue
+			}
+			return nil
+		default:
+			return errno
+		}
 	}
 }
 
